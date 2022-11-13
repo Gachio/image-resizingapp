@@ -1,0 +1,99 @@
+{
+    "AWSTemplateFormatVersion" : "2010-09-09",
+    "Description" : "Image resizing stack",
+    "Resources" : {
+        "ImageResizingBucket": {
+            "Type": "AWS::S3::Bucket"
+        },
+        "ImageResizingRole" : {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Statement": [ {
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service" : [ "ec2.amazonaws.com"]
+                        },
+                        "Action": ["sts:AssumeRole"]
+                    }]
+                },
+                "Path": "/"
+            }
+        },
+        "ImageResizingPolicies": {
+            "Type": "AWS::IAM::Policy",
+            "Properties": {
+                "PolicyName": "root",
+                "PolicyDocument": {
+                    "Statement": [ {
+                        "Effect": "Allow",
+                        "Action": [
+                            "s3:ListBucket", "s3:GetObject",
+                            "s3:PutObject", "s3:DeleteObject"
+                        ],
+                        "Resource": [
+                            {"Fn::Join": [ "", [ "arn:aws:s3:::", {"Ref": "ImageResizingBucket"} ] ] },
+                            {"Fn::Join": [ "", ["arn:aws:s3:::", {"Ref": "ImageResizingBucket"}, "/*"]]
+                        }
+                        ]
+                    } ]
+                },
+                "Roles": [ {
+                    "Ref": "ImageResizingRole"
+                }]
+            }
+        },
+        "ImageResizingProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "Path": "/",
+                "Roles": [ {
+                    "Ref": "ImageResizingRole"
+                }]
+            }
+        },
+        "ImageResizingInstance" : {
+            "Type" : "AWS::EC2::Instance",
+            "Properties" : {
+                "InstanceType": "t1.micro",
+                "ImageId": "ami-da1810ae",
+                "KeyName": "your-ssh-key-name",
+                "SecurityGroups" : [
+                    {"Ref": "ImageResizingSecurityGroup"}
+                ],
+                "IamInstanceProfile": {
+                    "Ref": "ImageResizingProfile"
+                },
+                "Tags" : [
+                    {"Key" : "role", "Value": "image-resizing"}
+                ],
+                "UserData" : {
+                    "Fn::Base64": {"Ref": "ImageResizingBucket"}
+                }
+            }
+        },
+        "ImageResizingSecurityGroup" : {
+            "Type" : "AWS::EC2::SecurityGroup",
+            "Properties" : {
+                "GroupDescription" : "Allow SSH from anywhere",
+                "SecurityGroupIngress" : [ {
+                    "IpProtocol" : "tcp",
+                    "FromPort" : "22",
+                    "ToPort" : "22",
+                    "CidrIp" : "0.0.0.0/0"
+                }
+            ]
+            }
+        }
+    },
+    "Outputs" : {
+        "BucketName" : {
+            "Description" : "The name of the S3 bucket",
+            "Value" : { "Ref" : "ImageResizingBucket" }
+        },
+        "InstanceIP" : {
+            "Description" : "Public IP address of the newly created EC2 instance",
+            "Value" : { "Fn::GetAtt" : [ "ImageResizingInstance", "PublicIp" ] }
+        }
+    }
+}
